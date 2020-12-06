@@ -1,20 +1,19 @@
 package com.iiq.rtbEngine.db;
 
 import java.sql.SQLException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-//import com.iiq.rtbEngine.services.CacheService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 
 @Component
-public class ProfilesDao {//} implements CacheService{
+public class ProfilesDao {
+
     @Autowired
     private H2DB h2Db;
 
@@ -23,7 +22,6 @@ public class ProfilesDao {//} implements CacheService{
 
     private static final String CACHE_NAMES = "PROFILES";
 
-    //	@Override
     @CacheEvict(allEntries = true, cacheNames = {CACHE_NAMES})
     public void cacheEvict() {
         System.out.println("clearing ProfilesDao cache");
@@ -50,9 +48,18 @@ public class ProfilesDao {//} implements CacheService{
         }
     }
 
+    private Map<Integer, Object> profileToLockMap = new ConcurrentHashMap<>();
+
+    public Object getLockProfile(Integer profileId) {
+        if (!profileToLockMap.containsKey(profileId))
+            profileToLockMap.put(Integer.valueOf(profileId), new Object());
+        return profileToLockMap.get(profileId);
+    }
+
     public void updateTable(String profileId, String attributeId) {
         try {
             h2Db.executeUpdate(String.format(UPDATE_STATMENT, profileId, attributeId, profileId, attributeId));
+            profileToLockMap.putIfAbsent(Integer.valueOf(profileId), new Object());
             self.cacheEvict();
         } catch (SQLException e) {
             System.out.println("Error while trying to update table " + PROFILES_TABLE_NAME + " with profileId=" + profileId + " attributeId" + attributeId);
@@ -60,7 +67,9 @@ public class ProfilesDao {//} implements CacheService{
         }
     }
 
+    @Cacheable(cacheNames = {CACHE_NAMES})
     public Set<Integer> getProfileAttributes(int profileId) {
+        System.out.println("getProfileAttributes for profileId: " + profileId);
 
         Set<Integer> attributes = new HashSet<>();
         try {

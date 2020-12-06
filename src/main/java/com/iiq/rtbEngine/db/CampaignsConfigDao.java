@@ -64,7 +64,9 @@ public class CampaignsConfigDao {
         }
     }
 
+    @Cacheable(cacheNames = {CACHE_NAMES})
     public Integer getCampaignCapacity(int campaignId) {
+        System.out.println("getCampaignCapacity for campaignId: "+campaignId);
 
         Integer capacity = null;
         try {
@@ -81,8 +83,9 @@ public class CampaignsConfigDao {
         return capacity;
     }
 
+    @Cacheable(cacheNames = {CACHE_NAMES})
     public Integer getCampaignPriority(int campaignId) {
-
+        System.out.println("getCampaignPriority for campaignId: "+campaignId);
         Integer capacity = null;
         try {
             List<Map<String, String>> result = h2Db.executeQuery(String.format(SELECT_CONFIG_STATEMENT, campaignId + ""), PRIORITY_COLUMN);
@@ -116,7 +119,6 @@ public class CampaignsConfigDao {
         return null;
     }
 
-	@Cacheable(cacheNames = {CACHE_NAMES})
 	public Map<Integer, CampaignConfig> getAllCampaignsConfigs() {
         Map<Integer, CampaignConfig> res = new HashMap<>();
 

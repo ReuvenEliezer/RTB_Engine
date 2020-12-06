@@ -7,100 +7,110 @@ import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.iiq.rtbEngine.db.ProfilesDao;
+import com.iiq.rtbEngine.models.ActionTypeEnum;
 import com.iiq.rtbEngine.models.RequestParams;
+import com.iiq.rtbEngine.models.ResponseTypeEnum;
 import com.iiq.rtbEngine.services.ActionHandler;
 import com.iiq.rtbEngine.services.DbManager;
+import com.iiq.rtbEngine.util.CommonConfig;
+import com.iiq.rtbEngine.util.WsAddressConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 
 @RestController
+@RequestMapping(WsAddressConstants.apiLogicUrl)
 public class MainController {
-
-    private static final String ACTION_TYPE_VALUE = "act";
-    private static final String ATTRIBUTE_ID_VALUE = "atid";
-    private static final String PROFILE_ID_VALUE = "pid";
-
-    private static final String UNMATCHED = "unmatched";
-    private static final String CAPPED = "capped";
-
-    public enum UrlParam {
-        ACTION_TYPE(ACTION_TYPE_VALUE),
-        ATTRIBUTE_ID(ATTRIBUTE_ID_VALUE),
-        PROFILE_ID(PROFILE_ID_VALUE),
-        ;
-
-        private final String value;
-
-        private UrlParam(String value) {
-            this.value = value;
-        }
-
-        public String getValue() {
-            return value;
-        }
-    }
-
-    public enum ActionType {
-        ATTRIBUTION_REQUEST(0),
-        BID_REQUEST(1),
-        ;
-
-        private int id;
-        private static Map<Integer, ActionType> idToRequestMap = new HashMap<>();
-
-        static {
-            for (ActionType actionType : ActionType.values())
-                idToRequestMap.put(actionType.getId(), actionType);
-        }
-
-        public int getId() {
-            return this.id;
-        }
-
-        private ActionType(int id) {
-            this.id = id;
-        }
-
-        public static ActionType getActionTypeById(int id) {
-            return idToRequestMap.get(id);
-        }
-
-    }
 
     @Autowired
     private DbManager dbManager;
 
-    private Map<ActionType, ActionHandler> actionHandlerMap = new HashMap<>();
+    @Autowired
+    private ProfilesDao profilesDao;
 
-    private Map<Integer, Object> profileToLockMap = new HashMap<>();
+    private Map<ActionTypeEnum, ActionHandler> actionHandlerMap = new HashMap<>();
+    private Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
 
+//    private Map<Integer, Object> profileToLockMap = new HashMap<>();
 
     @PostConstruct
     public void init() {
         //initialize stuff after application finished start up
-        actionHandlerMap.put(ActionType.ATTRIBUTION_REQUEST, this::handleAttributionRequest);
-        actionHandlerMap.put(ActionType.BID_REQUEST, this::handleBidRequest);
+        actionHandlerMap.put(ActionTypeEnum.ATTRIBUTION_REQUEST, this::handleAttributionRequest);
+        actionHandlerMap.put(ActionTypeEnum.BID_REQUEST, this::handleBidRequest);
     }
 
-    Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
+    @GetMapping()
+    public String getRequest(HttpServletRequest request, HttpServletResponse response,
+                             @RequestParam(name = CommonConfig.ACTION_TYPE_VALUE) int actionTypeId,
+                             @RequestParam(name = CommonConfig.ATTRIBUTE_ID_VALUE, required = false) Integer attributeId,
+                             @RequestParam(name = CommonConfig.PROFILE_ID_VALUE, required = false) Integer profileId) {
+        //GOOD LUCK! (;
+        ActionTypeEnum actionType = ActionTypeEnum.getActionTypeById(actionTypeId);
+        ActionHandler actionHandler = actionHandlerMap.get(actionType);
+        if (actionHandler != null) {
+            return actionHandler.doAction(new RequestParams(attributeId, profileId));
+        }
+        response.setStatus(HttpStatus.BAD_REQUEST.value());
+        return String.format("actionTypeId %s not supported", actionTypeId);
+    }
+
+    private String handleAttributionRequest(RequestParams requestParams) {
+        Integer attributeId = requestParams.getAttributeId();
+        Integer profileId = requestParams.getProfileId();
+        dbManager.updateProfileAttribute(profileId, attributeId);
+        return "";
+    }
 
     private String handleBidRequest(RequestParams requestParams) {
         Integer profileId = requestParams.getProfileId();
 
         Set<Integer> profileAttributes = dbManager.getProfileAttributes(profileId);
         if (profileAttributes.isEmpty())
-            return UNMATCHED;
+            return ResponseTypeEnum.UNMATCHED.getValue();
 
 //        List<Integer> campaignIdListResult = getAllMatchedCampaignIds(profileAttributes);
-        Set<Integer> campaignIdListResult = getAllMatchedCampaignIdsByMap(profileAttributes);
+        Set<Integer> allMatchedCampaignIdsList = getAllMatchedCampaignIdsByMap(profileAttributes);
 
-        if (campaignIdListResult == null || campaignIdListResult.isEmpty())
-            return UNMATCHED;
+        if (allMatchedCampaignIdsList == null || allMatchedCampaignIdsList.isEmpty())
+            return ResponseTypeEnum.UNMATCHED.getValue();
 
+        Integer campaignIdResult = getCampaignIdResult(allMatchedCampaignIdsList);
+
+        Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
+        if (campaignCapacity == null) {
+            //no limited
+            return campaignIdResult.toString();
+        }
+
+        if (isCampaignCapacityExceeded(profileId, campaignCapacity))
+            return ResponseTypeEnum.CAPPED.getValue();
+
+        return campaignIdResult.toString();
+    }
+
+    private boolean isCampaignCapacityExceeded(Integer profileId, Integer campaignCapacity) {
+        synchronized (profilesDao.getLockProfile(profileId)) {
+            Integer profileTotalReturnCount = profilePublishCountMap.get(profileId);
+
+            if (profileTotalReturnCount == null) {
+                profilePublishCountMap.put(profileId, 1);
+            } else if (profileTotalReturnCount < campaignCapacity) {
+                profilePublishCountMap.put(profileId, profileTotalReturnCount + 1);
+            } else {
+//                profileCount.equals(campaignCapacity)
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Integer getCampaignIdResult(Set<Integer> campaignIdListResult) {
         Integer campaignIdResult = null;
         Integer campaignPriority = null;
 
@@ -123,27 +133,7 @@ public class MainController {
                 }
             }
         }
-
-        Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
-        if (campaignCapacity == null) {
-            //no limited
-            return campaignIdResult.toString();
-        }
-
-        synchronized (profileToLockMap.getOrDefault(profileId, new Object()) ) {
-            Integer profileTotalReturnCount = profilePublishCountMap.get(profileId);
-
-            if (profileTotalReturnCount == null) {
-                profilePublishCountMap.put(profileId, 1);
-            } else if (profileTotalReturnCount < campaignCapacity) {
-                profilePublishCountMap.put(profileId, profileTotalReturnCount + 1);
-            } else {
-//                profileCount.equals(campaignCapacity)
-                return CAPPED;
-            }
-        }
-
-        return campaignIdResult.toString();
+        return campaignIdResult;
     }
 
     private List<Integer> getAllMatchedCampaignIds(Set<Integer> profileAttributes) {
@@ -159,7 +149,7 @@ public class MainController {
     }
 
     private Set<Integer> getAllMatchedCampaignIdsByMap(Set<Integer> profileAttributes) {
-       return dbManager.getCampaigns(profileAttributes);
+        return dbManager.getCampaigns(profileAttributes);
 
     }
 
@@ -173,26 +163,5 @@ public class MainController {
         return true;
     }
 
-    private String handleAttributionRequest(RequestParams requestParams) {
-        Integer attributeId = requestParams.getAttributeId();
-        Integer profileId = requestParams.getProfileId();
-        dbManager.updateProfileAttribute(profileId, attributeId);
-        return "";
-    }
-
-    @GetMapping("/api")
-    public String getRequest(HttpServletRequest request, HttpServletResponse response,
-                             @RequestParam(name = ACTION_TYPE_VALUE) int actionTypeId,
-                             @RequestParam(name = ATTRIBUTE_ID_VALUE, required = false) Integer attributeId,
-                             @RequestParam(name = PROFILE_ID_VALUE, required = false) Integer profileId) {
-        //GOOD LUCK! (;
-        ActionType actionType = ActionType.getActionTypeById(actionTypeId);
-        ActionHandler actionHandler = actionHandlerMap.get(actionType);
-        if (actionHandler != null) {
-            return actionHandler.doAction(new RequestParams(attributeId, profileId));
-        }
-        response.setStatus(HttpStatus.BAD_REQUEST.value());
-        return String.format("actionTypeId %s not supported", actionTypeId);
-    }
 
 }

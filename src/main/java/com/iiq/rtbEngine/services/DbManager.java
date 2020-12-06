@@ -44,7 +44,7 @@ public class DbManager {
         //init Profile table
         initProfilesTable();
 
-        iniCampaignsToAttributesMap();
+        initAttributeToCampaignsMap();
     }
 
 //    public Map<List<Integer>, Set<Integer>> attributesToCampaignsMap = new ConcurrentHashMap<>();
@@ -114,7 +114,7 @@ public class DbManager {
                 .collect(Collectors.toList());
     }
 
-    private void iniCampaignsToAttributesMap() {
+    private void initAttributeToCampaignsMap() {
         Map<Integer, List<Integer>> allCampaignAttributes = getAllCampaignAttributes();
         for (Map.Entry<Integer, List<Integer>> entry : allCampaignAttributes.entrySet()) {
             for (Integer attribute : entry.getValue()) {

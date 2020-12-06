@@ -63,7 +63,9 @@ public class CampaignsDao {
         }
     }
 
+    @Cacheable(cacheNames = {CACHE_NAMES})
     public Set<Integer> getCampaignAttributes(int campaignId) {
+        System.out.println("getCampaignAttributes for campaignId: " + campaignId);
 
         Set<Integer> attributes = new HashSet<>();
         try {
@@ -83,7 +85,6 @@ public class CampaignsDao {
         return attributes;
     }
 
-    @Cacheable(cacheNames = {CACHE_NAMES})
     public Map<Integer, List<Integer>> getAllCampaignAttributes() {
         Map<Integer, List<Integer>> campaignToAttributesMap = new HashMap<>();
         try {
