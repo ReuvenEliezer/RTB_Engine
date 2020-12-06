@@ -86,7 +86,26 @@ public class DbManager {
             if (entry.getValue() != null)
                 matchedCampaignsResult.addAll(entry.getValue());
         }
-        return matchedCampaignsResult;
+
+
+        Set<Integer> finalCampaignIds = new HashSet<>(matchedCampaignsResult);
+        for (Integer campaignId : matchedCampaignsResult) {
+            Set<Integer> campaignAttributes = getCampaignAttributes(campaignId);
+            if (!isAttributesMatched(profileAttributes, campaignAttributes)) {
+                finalCampaignIds.remove(campaignId);
+            }
+        }
+        return finalCampaignIds;
+    }
+
+    private boolean isAttributesMatched(Set<Integer> profileAttributes, Set<Integer> campaignAttributes) {
+        if (campaignAttributes == null || campaignAttributes.isEmpty()) return false;
+        for (Integer integer : campaignAttributes) {
+            if (!profileAttributes.contains(integer)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<Integer> sortSet(Set<Integer> profileAttributes) {
