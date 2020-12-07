@@ -2,6 +2,7 @@ package com.iiq.rtbEngine.controller;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
@@ -9,6 +10,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.iiq.rtbEngine.db.ProfilesDao;
 import com.iiq.rtbEngine.models.ActionTypeEnum;
+import com.iiq.rtbEngine.models.CampaignProfile;
 import com.iiq.rtbEngine.models.RequestParams;
 import com.iiq.rtbEngine.models.ResponseTypeEnum;
 import com.iiq.rtbEngine.services.ActionHandler;
@@ -34,9 +36,8 @@ public class MainController {
     private ProfilesDao profilesDao;
 
     private Map<ActionTypeEnum, ActionHandler> actionHandlerMap = new HashMap<>();
-    private Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
-
-//    private Map<Integer, Object> profileToLockMap = new HashMap<>();
+//    private Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
+    private Map<CampaignProfile, AtomicInteger> profilePublishAtomicCountMap = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -80,37 +81,55 @@ public class MainController {
         if (allMatchedCampaignIdsList == null || allMatchedCampaignIdsList.isEmpty())
             return ResponseTypeEnum.UNMATCHED.getValue();
 
-        Integer campaignIdResult = getCampaignIdResult(allMatchedCampaignIdsList);
+        return getBestCampaignIdResultByPriorityAndLowestId(profileId, allMatchedCampaignIdsList);
 
-        Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
-        if (campaignCapacity == null) {
-            //no limited
-            return campaignIdResult.toString();
-        }
+    }
 
-        if (isCampaignCapacityExceeded(profileId, campaignCapacity))
+    private String getBestCampaignIdResultByPriorityAndLowestId(Integer profileId, Set<Integer> allMatchedCampaignIdsList) {
+        if (allMatchedCampaignIdsList.isEmpty())
             return ResponseTypeEnum.CAPPED.getValue();
-
+        Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestId(allMatchedCampaignIdsList);
+        Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
+        if (campaignCapacity != null) {
+            if (isCampaignCapacityExceededUseAtomic(profileId, campaignCapacity,campaignIdResult)) {
+                allMatchedCampaignIdsList.remove(campaignIdResult);
+                return getBestCampaignIdResultByPriorityAndLowestId(profileId, allMatchedCampaignIdsList);
+            }
+        }
         return campaignIdResult.toString();
     }
 
-    private boolean isCampaignCapacityExceeded(Integer profileId, Integer campaignCapacity) {
-        synchronized (profilesDao.getLockProfile(profileId)) {
-            Integer profileTotalReturnCount = profilePublishCountMap.get(profileId);
+//    private boolean isCampaignCapacityExceeded(Integer profileId, Integer campaignCapacity) {
+//        synchronized (profilesDao.getLockProfile(profileId)) {
+//            Integer profileTotalReturnCount = profilePublishCountMap.get(profileId);
+//
+//            if (profileTotalReturnCount == null) {
+//                profilePublishCountMap.put(profileId, 1);
+//            } else if (profileTotalReturnCount < campaignCapacity) {
+//                profilePublishCountMap.put(profileId, profileTotalReturnCount + 1);
+//            } else {
+////                profileCount.equals(campaignCapacity)
+//                return true;
+//            }
+//        }
+//        return false;
+//    }
 
-            if (profileTotalReturnCount == null) {
-                profilePublishCountMap.put(profileId, 1);
-            } else if (profileTotalReturnCount < campaignCapacity) {
-                profilePublishCountMap.put(profileId, profileTotalReturnCount + 1);
-            } else {
+    private boolean isCampaignCapacityExceededUseAtomic(Integer profileId, Integer campaignCapacity, Integer campaignId) {
+        CampaignProfile campaignProfile = new CampaignProfile(profileId, campaignId);
+        AtomicInteger profileTotalReturnCount = profilePublishAtomicCountMap.get(campaignProfile);
+        if (profileTotalReturnCount == null) {
+            profilePublishAtomicCountMap.put(campaignProfile, new AtomicInteger(1));
+        } else if (profileTotalReturnCount.get() < campaignCapacity) {
+            profileTotalReturnCount.getAndIncrement();
+        } else {
 //                profileCount.equals(campaignCapacity)
-                return true;
-            }
+            return true;
         }
         return false;
     }
 
-    private Integer getCampaignIdResult(Set<Integer> campaignIdListResult) {
+    private Integer getBestCampaignIdResultByPriorityAndLowestId(Set<Integer> campaignIdListResult) {
         Integer campaignIdResult = null;
         Integer campaignPriority = null;
 
