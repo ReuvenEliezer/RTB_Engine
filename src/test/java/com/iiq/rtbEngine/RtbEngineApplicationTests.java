@@ -100,8 +100,15 @@ class RtbEngineApplicationTests {
         Assertions.assertEquals("103", result1);
         String result2 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
         Assertions.assertEquals("103", result2);
-        String result3 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
-        Assertions.assertEquals(ResponseTypeEnum.CAPPED.getValue(), result3, "the max capacity is reached");
+        String result4 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
+        Assertions.assertEquals("102", result4);
+        String result5 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
+        Assertions.assertEquals("102", result5);
+        String result6 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
+        Assertions.assertEquals("101", result6);
+
+        String result8 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
+        Assertions.assertEquals(ResponseTypeEnum.CAPPED.getValue(), result8, "the max capacity is reached");
 
         profileId = 4;
         String resultProfile4 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
@@ -111,7 +118,7 @@ class RtbEngineApplicationTests {
         String resultProfile42 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
         Assertions.assertEquals("103", resultProfile42);
         String resultProfile43 = restTemplate.getForObject(String.format(WsAddressConstants.apiFullUrl +"?%s=%s&%s=%s", actionType.getValue(), bidRequest.getId(), profileName.getValue(), profileId), String.class);
-        Assertions.assertEquals(ResponseTypeEnum.CAPPED.getValue(), resultProfile43, "the max capacity is reached");
+        Assertions.assertEquals("102", resultProfile43);
     }
 
 }
