@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 @Component
-public class BestCampaignRecursiveSolutionQueueImpl extends AbstractBestCampaignSolution {
+public class BestCampaignRecursiveSolutionImpl extends AbstractBestCampaignSolution {
 
 
     @Override
