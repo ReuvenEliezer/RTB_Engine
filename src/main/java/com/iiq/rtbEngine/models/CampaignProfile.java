@@ -12,21 +12,6 @@ public class CampaignProfile {
         this.campaignId = campaignId;
     }
 
-    public Integer getProfileId() {
-        return profileId;
-    }
-
-    public void setProfileId(Integer profileId) {
-        this.profileId = profileId;
-    }
-
-    public Integer getCampaignId() {
-        return campaignId;
-    }
-
-    public void setCampaignId(Integer campaignId) {
-        this.campaignId = campaignId;
-    }
 
     @Override
     public boolean equals(Object o) {

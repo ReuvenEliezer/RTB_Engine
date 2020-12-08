@@ -2,6 +2,7 @@ package com.iiq.rtbEngine.controller;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.PostConstruct;
@@ -36,7 +37,7 @@ public class MainController {
     private ProfilesDao profilesDao;
 
     private Map<ActionTypeEnum, ActionHandler> actionHandlerMap = new HashMap<>();
-//    private Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
+    //    private Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
     private Map<CampaignProfile, AtomicInteger> profilePublishAtomicCountMap = new ConcurrentHashMap<>();
 
     @PostConstruct
@@ -61,6 +62,13 @@ public class MainController {
         return String.format("actionTypeId %s not supported", actionTypeId);
     }
 
+    /**
+     * this add attributeId to profileId.
+     * for each profileId may have one or many attributes
+     *
+     * @param requestParams
+     * @return
+     */
     private String handleAttributionRequest(RequestParams requestParams) {
         Integer attributeId = requestParams.getAttributeId();
         Integer profileId = requestParams.getProfileId();
@@ -68,7 +76,33 @@ public class MainController {
         return "";
     }
 
+    /**
+     * attribute is a sector that the profile (user) have the interested with it.
+     * for example:
+     * for (profile)user #1 - have the attributes 1,2 - when the #1 is Sport Sectors and #2 is a Shopping
+     * a campaign is contains one or more Sectors..
+     *
+     * @param requestParams - only profile id
+     * @return: the campaign that all his attributes matched to the profile attribute.
+     * for example: if campaign #1 contains attribute 1,2 and the profile have the attributes 1,2,3 - the campaign is matched.
+     * but the other campaign with attributes 1,2,3,4 - not matched because of the attribute #4 is not in profile attributes.
+     * <p>
+     * if matched more than one campaign for a profile - the system will be return the campaign with high priority,
+     * if have more than one campaign with the same priority - the system will be return the campaign with the lowest campaign id.
+     * Constraint - for each campaign - have a max capacity.
+     * <p>
+     * in case of the max capacity will be arrived
+     * - the system will be return the next campaign that matched on the above conditions
+     * (matched attributes and highest priority, lowest campaign id, and not reached the max capacity)
+     * <p>
+     * the max capacity flag required for each profile:
+     * for example - if profile #3 arrived the max capacity of the specific campaign -
+     * this is not effected on the others profile - in the other words - the max capacity will be managed for each profile.
+     * <p>
+     * in the part 2 tack - we need to consider that method may be to call for same profile in the same time. = we need to keep all the above conditions.
+     */
     private String handleBidRequest(RequestParams requestParams) {
+
         Integer profileId = requestParams.getProfileId();
 
         Set<Integer> profileAttributes = dbManager.getProfileAttributes(profileId);
@@ -81,19 +115,43 @@ public class MainController {
         if (allMatchedCampaignIdsList == null || allMatchedCampaignIdsList.isEmpty())
             return ResponseTypeEnum.UNMATCHED.getValue();
 
-        return getBestCampaignIdResultByPriorityAndLowestId(profileId, allMatchedCampaignIdsList);
 
+        return getBestCampaignIdResultByPriorityAndLowestIdByBuildingQueue(profileId, allMatchedCampaignIdsList);
+//        return getBestCampaignIdResultByPriorityAndLowestIdByRecursive(profileId, allMatchedCampaignIdsList);
     }
 
-    private String getBestCampaignIdResultByPriorityAndLowestId(Integer profileId, Set<Integer> allMatchedCampaignIdsList) {
+    private String getBestCampaignIdResultByPriorityAndLowestIdByBuildingQueue(Integer profileId, Set<Integer> allMatchedCampaignIdsList) {
+        Comparator<CampaignRank> lowestCampaignIdComparing = Comparator.comparing(CampaignRank::getCampaignId).reversed();
+        Comparator<CampaignRank> highestCampaignPriorityComparing = Comparator.comparing(CampaignRank::getCampaignPriority).reversed();
+        PriorityBlockingQueue<CampaignRank> campaignQueue = new PriorityBlockingQueue(allMatchedCampaignIdsList.size(),
+                highestCampaignPriorityComparing.thenComparing(lowestCampaignIdComparing));
+
+        for (Integer campaignId : allMatchedCampaignIdsList) {
+            Integer campaignPriority = dbManager.getCampaignPriority(campaignId);
+            campaignQueue.add(new CampaignRank(campaignId, campaignPriority));
+        }
+
+        while (!campaignQueue.isEmpty()) {
+            CampaignRank campaignRank = campaignQueue.poll();
+            System.out.println(campaignRank.toString());
+            CampaignProfile campaignProfile = new CampaignProfile(profileId, campaignRank.getCampaignId());
+            Integer campaignCapacity = dbManager.getCampaignCapacity(campaignRank.getCampaignId());
+            if (!isCampaignCapacityExceededUseAtomic(campaignProfile, campaignCapacity)) {
+                return String.valueOf(campaignRank.campaignId);
+            }
+        }
+        return ResponseTypeEnum.CAPPED.getValue();
+    }
+
+    private String getBestCampaignIdResultByPriorityAndLowestIdByRecursive(Integer profileId, Set<Integer> allMatchedCampaignIdsList) {
         if (allMatchedCampaignIdsList.isEmpty())
             return ResponseTypeEnum.CAPPED.getValue();
-        Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestId(allMatchedCampaignIdsList);
+        Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestIdByRecursive(allMatchedCampaignIdsList);
         Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
         if (campaignCapacity != null) {
-            if (isCampaignCapacityExceededUseAtomic(profileId, campaignCapacity,campaignIdResult)) {
+            if (isCampaignCapacityExceededUseAtomic(new CampaignProfile(profileId, campaignIdResult), campaignCapacity)) {
                 allMatchedCampaignIdsList.remove(campaignIdResult);
-                return getBestCampaignIdResultByPriorityAndLowestId(profileId, allMatchedCampaignIdsList);
+                return getBestCampaignIdResultByPriorityAndLowestIdByRecursive(profileId, allMatchedCampaignIdsList);
             }
         }
         return campaignIdResult.toString();
@@ -115,8 +173,7 @@ public class MainController {
 //        return false;
 //    }
 
-    private boolean isCampaignCapacityExceededUseAtomic(Integer profileId, Integer campaignCapacity, Integer campaignId) {
-        CampaignProfile campaignProfile = new CampaignProfile(profileId, campaignId);
+    private boolean isCampaignCapacityExceededUseAtomic(CampaignProfile campaignProfile, Integer campaignCapacity) {
         AtomicInteger profileTotalReturnCount = profilePublishAtomicCountMap.get(campaignProfile);
         if (profileTotalReturnCount == null) {
             profilePublishAtomicCountMap.put(campaignProfile, new AtomicInteger(1));
@@ -129,7 +186,7 @@ public class MainController {
         return false;
     }
 
-    private Integer getBestCampaignIdResultByPriorityAndLowestId(Set<Integer> campaignIdListResult) {
+    private Integer getBestCampaignIdResultByPriorityAndLowestIdByRecursive(Set<Integer> campaignIdListResult) {
         Integer campaignIdResult = null;
         Integer campaignPriority = null;
 
@@ -154,6 +211,46 @@ public class MainController {
         }
         return campaignIdResult;
     }
+
+    class CampaignRank {
+        int campaignId;
+        int campaignPriority;
+
+        public CampaignRank(int campaignId, int campaignPriority) {
+            this.campaignId = campaignId;
+            this.campaignPriority = campaignPriority;
+        }
+
+        public int getCampaignId() {
+            return campaignId;
+        }
+
+        public int getCampaignPriority() {
+            return campaignPriority;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            CampaignRank that = (CampaignRank) o;
+            return campaignId == that.campaignId && campaignPriority == that.campaignPriority;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(campaignId, campaignPriority);
+        }
+
+        @Override
+        public String toString() {
+            return "CampaignRank{" +
+                    "campaignId=" + campaignId +
+                    ", campaignPriority=" + campaignPriority +
+                    '}';
+        }
+    }
+
 
     private List<Integer> getAllMatchedCampaignIds(Set<Integer> profileAttributes) {
         Map<Integer, List<Integer>> allCampaignAttributes = dbManager.getAllCampaignAttributes();
