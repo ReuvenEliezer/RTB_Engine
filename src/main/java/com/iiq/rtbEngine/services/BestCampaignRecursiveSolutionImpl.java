@@ -2,7 +2,6 @@ package com.iiq.rtbEngine.services;
 
 import com.iiq.rtbEngine.models.CampaignProfile;
 import com.iiq.rtbEngine.models.ResponseTypeEnum;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -18,7 +17,7 @@ public class BestCampaignRecursiveSolutionImpl extends AbstractBestCampaignSolut
         Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestIdByRecursive(allMatchedCampaignIdsList);
         Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
         if (campaignCapacity != null) {
-            if (isCampaignCapacityExceededUseAtomic(new CampaignProfile(profileId, campaignIdResult), campaignCapacity)) {
+            if (isCampaignCapacityExceeded(new CampaignProfile(profileId, campaignIdResult), campaignCapacity)) {
                 allMatchedCampaignIdsList.remove(campaignIdResult);
                 return getBestCampaignIdResultByPriorityAndLowestId(profileId, allMatchedCampaignIdsList);
             }

@@ -12,6 +12,14 @@ public class CampaignProfile {
         this.campaignId = campaignId;
     }
 
+    public Integer getProfileId() {
+        return profileId;
+    }
+
+    public Integer getCampaignId() {
+        return campaignId;
+    }
+
 
     @Override
     public boolean equals(Object o) {

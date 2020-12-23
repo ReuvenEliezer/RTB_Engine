@@ -16,7 +16,8 @@ public abstract class AbstractBestCampaignSolution implements BestCampaignSoluti
     @Autowired
     protected DbManager dbManager;
 
-    protected final boolean isCampaignCapacityExceededUseAtomic(CampaignProfile campaignProfile, Integer campaignCapacity) {
+    //using atomic for multi threaded for same profile (user)
+    protected final boolean isCampaignCapacityExceeded(CampaignProfile campaignProfile, Integer campaignCapacity) {
         AtomicInteger profileTotalReturnCount = profilePublishAtomicCountMap.get(campaignProfile);
         if (profileTotalReturnCount == null) {
             profilePublishAtomicCountMap.put(campaignProfile, new AtomicInteger(1));
@@ -24,8 +25,10 @@ public abstract class AbstractBestCampaignSolution implements BestCampaignSoluti
             profileTotalReturnCount.getAndIncrement();
         } else {
 //                profileCount.equals(campaignCapacity)
+            System.out.println(String.format("campaign id %s for profile (user-id) %s is Exceeded the max capacity: %s ", campaignProfile.getCampaignId(), campaignProfile.getProfileId(), campaignCapacity));
             return true;
         }
+
         return false;
     }
 

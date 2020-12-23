@@ -113,7 +113,7 @@ public class MainController {
 //        List<Integer> campaignIdListResult = getAllMatchedCampaignIds(profileAttributes);
         Set<Integer> allMatchedCampaignIdsList = getAllMatchedCampaignIdsByMap(profileAttributes);
 
-        if (allMatchedCampaignIdsList == null || allMatchedCampaignIdsList.isEmpty())
+        if (allMatchedCampaignIdsList.isEmpty())
             return ResponseTypeEnum.UNMATCHED.getValue();
 
 
