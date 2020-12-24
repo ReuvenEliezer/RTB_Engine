@@ -19,7 +19,7 @@ public class BestCampaignRecursiveSolutionImpl extends AbstractBestCampaignSolut
         Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestId(allMatchedCampaignIdsList);
         Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
         if (campaignCapacity != null) {
-            if (isCampaignCapacityExceeded(new CampaignProfile(profileId, campaignIdResult), campaignCapacity)) {
+            if (isCampaignProfileReachedMaxCapacity(new CampaignProfile(profileId, campaignIdResult), campaignCapacity)) {
                 allMatchedCampaignIdsList.remove(campaignIdResult);
                 return getBestCampaignIdResultByPriorityAndLowestId(profileId, allMatchedCampaignIdsList);
             }

@@ -10,29 +10,29 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class AbstractBestCampaignSolution implements BestCampaignSolution {
 
-    private Map<CampaignProfile, AtomicInteger> profilePublishAtomicCountMap = new ConcurrentHashMap<>();
+    private Map<CampaignProfile, AtomicInteger> profilePublishToPublishAtomicCountMap = new ConcurrentHashMap<>();
     //    private Map<Integer, Integer> profilePublishCountMap = new ConcurrentHashMap<>();
 
     @Autowired
     protected DbManager dbManager;
 
     //using atomic for multi threaded for same profile (user)
-    protected final boolean isCampaignCapacityExceeded(CampaignProfile campaignProfile, Integer campaignCapacity) {
-        AtomicInteger profileTotalReturnCount = profilePublishAtomicCountMap.get(campaignProfile);
-        if (profileTotalReturnCount == null) {
-            profilePublishAtomicCountMap.put(campaignProfile, new AtomicInteger(1));
-        } else if (profileTotalReturnCount.get() < campaignCapacity) {
+    protected final boolean isCampaignProfileReachedMaxCapacity(CampaignProfile campaignProfile, Integer campaignCapacity) {
+        if (campaignCapacity < 1)
+            return true;
+        AtomicInteger profileTotalReturnCount = profilePublishToPublishAtomicCountMap.computeIfAbsent(campaignProfile, s -> new AtomicInteger());
+        if (profileTotalReturnCount.get() < campaignCapacity) {
             profileTotalReturnCount.getAndIncrement();
         } else {
 //                profileCount.equals(campaignCapacity)
-            System.out.println(String.format("campaign id %s for profile (user-id) %s is Exceeded the max capacity: %s ", campaignProfile.getCampaignId(), campaignProfile.getProfileId(), campaignCapacity));
+            System.out.println(String.format("campaign id %s for profile (user-id) %s is reached the max capacity: %s ", campaignProfile.getCampaignId(), campaignProfile.getProfileId(), campaignCapacity));
             return true;
         }
 
         return false;
     }
 
-//    protected final boolean isCampaignCapacityExceeded(Integer profileId, Integer campaignCapacity) {
+//    protected final boolean isCampaignProfileReachedMaxCapacity(Integer profileId, Integer campaignCapacity) {
 //        synchronized (profilesDao.getLockProfile(profileId)) {
 //            Integer profileTotalReturnCount = profilePublishCountMap.get(profileId);
 //

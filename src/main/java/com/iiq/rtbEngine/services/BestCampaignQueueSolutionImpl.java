@@ -3,7 +3,6 @@ package com.iiq.rtbEngine.services;
 import com.iiq.rtbEngine.models.CampaignProfile;
 import com.iiq.rtbEngine.models.CampaignRank;
 import com.iiq.rtbEngine.models.ResponseTypeEnum;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -35,7 +34,7 @@ public class BestCampaignQueueSolutionImpl extends AbstractBestCampaignSolution 
             System.out.println("poll campaignRank: "+campaignRank.toString());
             CampaignProfile campaignProfile = new CampaignProfile(profileId, campaignRank.getCampaignId());
             Integer campaignCapacity = dbManager.getCampaignCapacity(campaignRank.getCampaignId());
-            if (!isCampaignCapacityExceeded(campaignProfile, campaignCapacity)) {
+            if (!isCampaignProfileReachedMaxCapacity(campaignProfile, campaignCapacity)) {
                 return String.valueOf(campaignRank.getCampaignId());
             }
         }
