@@ -2,10 +2,12 @@ package com.iiq.rtbEngine.services;
 
 import com.iiq.rtbEngine.models.CampaignProfile;
 import com.iiq.rtbEngine.models.ResponseTypeEnum;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
+@Primary
 @Component
 public class BestCampaignRecursiveSolutionImpl extends AbstractBestCampaignSolution {
 
@@ -14,7 +16,7 @@ public class BestCampaignRecursiveSolutionImpl extends AbstractBestCampaignSolut
     public String getBestCampaignIdResultByPriorityAndLowestId(Integer profileId, Set<Integer> allMatchedCampaignIdsList) {
         if (allMatchedCampaignIdsList.isEmpty())
             return ResponseTypeEnum.CAPPED.getValue();
-        Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestIdByRecursive(allMatchedCampaignIdsList);
+        Integer campaignIdResult = getBestCampaignIdResultByPriorityAndLowestId(allMatchedCampaignIdsList);
         Integer campaignCapacity = dbManager.getCampaignCapacity(campaignIdResult);
         if (campaignCapacity != null) {
             if (isCampaignCapacityExceeded(new CampaignProfile(profileId, campaignIdResult), campaignCapacity)) {
@@ -25,26 +27,18 @@ public class BestCampaignRecursiveSolutionImpl extends AbstractBestCampaignSolut
         return campaignIdResult.toString();
     }
 
-    private Integer getBestCampaignIdResultByPriorityAndLowestIdByRecursive(Set<Integer> campaignIdListResult) {
+    private Integer getBestCampaignIdResultByPriorityAndLowestId(Set<Integer> campaignIdListResult) {
         Integer campaignIdResult = null;
         Integer campaignPriority = null;
 
         for (Integer campaignId : campaignIdListResult) {
-            if (campaignIdResult == null) {
+            Integer currentPriority = dbManager.getCampaignPriority(campaignId);
+            if (campaignIdResult == null || currentPriority > campaignPriority) {
+                campaignPriority = currentPriority;
                 campaignIdResult = campaignId;
-                campaignPriority = dbManager.getCampaignPriority(campaignId);
-            } else {
-                Integer currentPriority = dbManager.getCampaignPriority(campaignId);
-                if (campaignPriority == null) {
-                    throw new IllegalArgumentException("not defined a priority for campaignId: " + campaignId);
-                }
-                if (currentPriority > campaignPriority) {
-                    campaignPriority = currentPriority;
+            } else if (currentPriority.equals(campaignPriority)) {
+                if (campaignId < campaignIdResult) {
                     campaignIdResult = campaignId;
-                } else if (currentPriority.equals(campaignPriority)) {
-                    if (campaignId < campaignIdResult) {
-                        campaignIdResult = campaignId;
-                    }
                 }
             }
         }

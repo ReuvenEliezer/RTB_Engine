@@ -10,7 +10,7 @@ import java.util.Comparator;
 import java.util.Set;
 import java.util.concurrent.PriorityBlockingQueue;
 
-@Primary
+//@Primary
 @Component
 public class BestCampaignQueueSolutionImpl extends AbstractBestCampaignSolution {
 
