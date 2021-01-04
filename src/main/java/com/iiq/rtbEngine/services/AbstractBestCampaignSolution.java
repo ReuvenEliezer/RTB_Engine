@@ -23,13 +23,11 @@ public abstract class AbstractBestCampaignSolution implements BestCampaignSoluti
         AtomicInteger profileTotalReturnCount = profilePublishToPublishAtomicCountMap.computeIfAbsent(campaignProfile, s -> new AtomicInteger());
         if (profileTotalReturnCount.get() < campaignCapacity) {
             profileTotalReturnCount.getAndIncrement();
-        } else {
-//                profileCount.equals(campaignCapacity)
-            System.out.println(String.format("campaign id %s for profile (user-id) %s is reached the max capacity: %s ", campaignProfile.getCampaignId(), campaignProfile.getProfileId(), campaignCapacity));
-            return true;
+            return false;
         }
-
-        return false;
+//                profileCount.equals(campaignCapacity)
+        System.out.println(String.format("campaign id %s for profile (user-id) %s is reached the max capacity: %s ", campaignProfile.getCampaignId(), campaignProfile.getProfileId(), campaignCapacity));
+        return true;
     }
 
 //    protected final boolean isCampaignProfileReachedMaxCapacity(Integer profileId, Integer campaignCapacity) {

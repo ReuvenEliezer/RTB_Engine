@@ -184,9 +184,8 @@ public class DbManager {
      */
     public Integer getCampaignPriority(int campaignId) {
         Integer campaignPriority = campaignsConfigDao.getCampaignPriority(campaignId);
-        if (campaignPriority == null) {
+        if (campaignPriority == null)
             throw new IllegalArgumentException("not defined a priority for campaignId: " + campaignId);
-        }
         return campaignPriority;
     }
 
